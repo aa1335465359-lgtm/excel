@@ -1,4 +1,4 @@
-export type Skill = 'bold' | 'underline' | 'italic' | 'strikethrough' | 'highlight';
+export type Skill = 'bold' | 'underline' | 'italic' | 'strikethrough' | 'highlight' | 'rand' | 'sum' | 'vlookup' | 'wordart';
 
 export interface Player {
   id: string;
@@ -12,6 +12,7 @@ export interface Player {
   skills: Skill[];
   lastShot: number;
   lastLaser: number;
+  lastWordart?: number;
   kills: number;
   deaths: number;
   readyForNextStage: boolean;
@@ -95,6 +96,9 @@ export interface Bullet {
   isItalic: boolean;
   isUnderline: boolean;
   isHighlight: boolean;
+  isCrit?: boolean;
+  isVlookup?: boolean;
+  isWordart?: boolean;
 }
 
 export interface MapDef {
