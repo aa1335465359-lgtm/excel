@@ -22,7 +22,7 @@ const SKILL_DESCS: Record<Skill, string> = {
   rand: '20%概率触发暴击，造成3~5倍随机伤害 (看脸输出)',
   sum: '无限成长：每击杀10个敌人，基础伤害永久+1',
   vlookup: '子弹获得微弱的自动追踪能力 (精准匹配)',
-  wordart: '每3秒发射一个巨大的“推翻重做”艺术字，碾压一切'
+  wordart: '每6秒发射一个巨大的职场黑话艺术字，伤害降低但范围和击退极强'
 };
 
 const getStageDuration = (stage: number) => {
@@ -65,8 +65,8 @@ export default function App() {
         id: myId,
         x: MAPS[0].playerSpawn.x,
         y: MAPS[0].playerSpawn.y,
-        hp: 100,
-        maxHp: 100,
+        hp: 500,
+        maxHp: 500,
         angle: 0,
         isShooting: false,
         keys: { w: false, a: false, s: false, d: false },
@@ -206,6 +206,8 @@ export default function App() {
       else if (room.stage === 2) stageDuration = 2400;
       else if (room.stage === 3) stageDuration = 3000;
 
+      room.margin = 0;
+
       if (room.stageTimer >= stageDuration && room.players[myId]?.skills.length < Object.keys(SKILL_NAMES).length) {
         room.isSelectingSkill = true;
         return;
@@ -213,7 +215,7 @@ export default function App() {
 
       const spawnChance = 0.1 + (room.stage * 0.05) + (room.stageTimer / stageDuration) * 0.2;
       
-      const hpMult = room.stage >= 5 ? Math.pow(1.2, room.stage - 5) : 1;
+      const hpMult = room.stage >= 5 ? 1 + (room.stage - 5) * 0.5 : 1;
 
       if (room.stage >= 5 && room.stageTimer === 100) {
         const bossCount = room.stage === 5 ? 1 : Math.floor((room.stage - 4) / 2) + 1;
@@ -241,8 +243,10 @@ export default function App() {
         const spawnCount = Math.floor(Math.random() * 3) + 1 + Math.floor(room.stage / 2);
         
         for(let i=0; i<spawnCount; i++) {
-          const sx = spawner.x + (Math.random() - 0.5) * 100;
-          const sy = spawner.y + (Math.random() - 0.5) * 100;
+          let sx = spawner.x + (Math.random() - 0.5) * 100;
+          let sy = spawner.y + (Math.random() - 0.5) * 100;
+          sx = Math.max(0, Math.min(currentMap.width, sx));
+          sy = Math.max(0, Math.min(currentMap.height, sy));
 
           let type: EnemyType = 'Minion';
           let hp = 15 * room.stage * hpMult;
@@ -267,7 +271,9 @@ export default function App() {
           }
 
           const freezeCount = room.enemies.filter(e => e.type === 'FreezeCell').length;
-          if (freezeCount >= 3) pFreeze = 0;
+          if (freezeCount >= 8) pFreeze = 0;
+
+          let stateTimer = 0;
 
           if (r < pValue) {
             type = 'Value'; text = '#VALUE!'; hp = 30 * room.stage * hpMult; speed = 1.5; width = 60;
@@ -275,6 +281,7 @@ export default function App() {
             type = 'FormatBrush'; text = '格式刷'; hp = 40 * room.stage * hpMult; speed = 0.8; width = 50;
           } else if (r < pValue + pBrush + pFreeze) {
             type = 'FreezeCell'; text = '冻结单元格'; hp = 150 * room.stage * hpMult; speed = 0.3; width = 80; height = 40;
+            stateTimer = Math.random() * 600;
           } else if (r < pValue + pBrush + pFreeze + pShield) {
             type = 'ProtectedView'; text = '受保护视图'; hp = 80 * room.stage * hpMult; speed = 0.9; width = 70;
           } else if (r < pValue + pBrush + pFreeze + pShield + pMerged) {
@@ -300,13 +307,23 @@ export default function App() {
             id: room.enemyIdCounter++,
             x: sx, y: sy, hp, maxHp: hp, type, vx: 0, vy: 0, knockbackX: 0, knockbackY: 0,
             text, width, height, speed,
-            state: 'idle', stateTimer: 0, lastAttack: 0
+            state: 'idle', stateTimer, lastAttack: 0
           });
         }
       }
 
       const checkObstacleCollision = (x: number, y: number, w: number, h: number, isPlayer: boolean = false) => {
+        if (x - w/2 < room.margin || x + w/2 > currentMap.width - room.margin ||
+            y - h/2 < room.margin || y + h/2 > currentMap.height - room.margin) {
+          return true;
+        }
         for (const obs of currentMap.obstacles) {
+          if (x + w/2 > obs.x && x - w/2 < obs.x + obs.w && 
+              y + h/2 > obs.y && y - h/2 < obs.y + obs.h) {
+            return true;
+          }
+        }
+        for (const obs of room.dynamicObstacles) {
           if (x + w/2 > obs.x && x - w/2 < obs.x + obs.w && 
               y + h/2 > obs.y && y - h/2 < obs.y + obs.h) {
             return true;
@@ -320,6 +337,10 @@ export default function App() {
 
       const p = room.players[myId];
       if (p && p.hp > 0) {
+        if (p.hp < p.maxHp) {
+          p.hp = Math.min(p.maxHp, p.hp + 0.1); // ~6 HP per second regen
+        }
+        
         let speedMultiplier = 1;
         
         for (const puddle of room.puddles) {
@@ -346,8 +367,8 @@ export default function App() {
         if (!checkObstacleCollision(p.x + dx, p.y, 40, 20, true)) p.x += dx;
         if (!checkObstacleCollision(p.x, p.y + dy, 40, 20, true)) p.y += dy;
         
-        p.x = Math.max(0, Math.min(currentMap.width, p.x));
-        p.y = Math.max(0, Math.min(currentMap.height, p.y));
+        p.x = Math.max(room.margin, Math.min(currentMap.width - room.margin, p.x));
+        p.y = Math.max(room.margin, Math.min(currentMap.height - room.margin, p.y));
 
         for (let i = room.items.length - 1; i >= 0; i--) {
           const item = room.items[i];
@@ -385,7 +406,12 @@ export default function App() {
           const isWordart = p.skills.includes('wordart');
 
           if (isSum) {
-            damage += Math.floor(p.kills / 10);
+            const stacks = p.sumStacks || 0;
+            if (stacks <= 20) {
+              damage += stacks;
+            } else {
+              damage += 20 + Math.floor(Math.sqrt(stacks - 20) * 2);
+            }
           }
 
           if (isBold) {
@@ -395,6 +421,8 @@ export default function App() {
           if (isItalic) {
             pierce = 4;
           }
+          
+          size *= (p.sizeMult || 1);
 
           if (now - p.lastShot > fireRate) {
             p.lastShot = now;
@@ -419,7 +447,9 @@ export default function App() {
                 vy: Math.sin(finalAngle) * bulletSpeed,
                 damage: finalDamage, life: 100, size, pierce,
                 bounces: isItalic ? 2 : 0,
-                isBold, isItalic, isUnderline, isHighlight, isCrit, isVlookup
+                isBold, isItalic, isUnderline, isHighlight, isCrit, isVlookup,
+                knockbackMult: p.knockbackMult || 1,
+                eliteDamageMult: p.eliteDamageMult || 1
               });
             };
 
@@ -458,18 +488,22 @@ export default function App() {
             });
           }
 
-          if (isWordart && now - (p.lastWordart || 0) > 3000) {
+          if (isWordart && now - (p.lastWordart || 0) > 6000) {
             p.lastWordart = now;
+            const wordartTexts = ["收到", "好的", "马上", "优化", "赋能", "对齐", "抓手", "闭环", "痛点", "底层逻辑", "顶层设计", "组合拳", "打法", "颗粒度", "复盘"];
+            const randomText = wordartTexts[Math.floor(Math.random() * wordartTexts.length)];
             room.bullets.push({
               id: room.bulletIdCounter++,
               owner: p.id,
               x: p.x, y: p.y,
-              vx: Math.cos(p.angle) * 8,
-              vy: Math.sin(p.angle) * 8,
-              damage: damage * 15, life: 300, size: 80, pierce: 999,
+              vx: Math.cos(p.angle) * 12,
+              vy: Math.sin(p.angle) * 12,
+              damage: damage * 5, life: 300, size: 150, pierce: 999,
               bounces: 0,
               isBold: true, isItalic: false, isUnderline: false, isHighlight: false, isCrit: false, isVlookup: false,
-              isWordart: true
+              isWordart: true,
+              wordartText: randomText,
+              knockbackMult: (p.knockbackMult || 1) * 3 // 3x knockback for WordArt
             });
             shake.current = Math.max(shake.current, 10);
           }
@@ -576,8 +610,10 @@ export default function App() {
                 if (room.enemies.length < 200) {
                   const count = 50 + Math.floor(Math.random() * 30);
                   for (let k=0; k<count; k++) {
-                    const sx = e.x + (Math.random()-0.5)*800;
-                    const sy = e.y + (Math.random()-0.5)*800;
+                    let sx = e.x + (Math.random()-0.5)*800;
+                    let sy = e.y + (Math.random()-0.5)*800;
+                    sx = Math.max(0, Math.min(currentMap.width, sx));
+                    sy = Math.max(0, Math.min(currentMap.height, sy));
                     const r = Math.random();
                     let stype: EnemyType = 'Minion';
                     let stext = '乱码';
@@ -605,8 +641,10 @@ export default function App() {
                 for (let k=0; k<count; k++) {
                   const isHoriz = Math.random() > 0.5;
                   const offset = (Math.random() - 0.5) * 600;
-                  const sx = e.x + (isHoriz ? offset : 0);
-                  const sy = e.y + (isHoriz ? 0 : offset);
+                  let sx = e.x + (isHoriz ? offset : 0);
+                  let sy = e.y + (isHoriz ? 0 : offset);
+                  sx = Math.max(0, Math.min(currentMap.width, sx));
+                  sy = Math.max(0, Math.min(currentMap.height, sy));
                   room.enemies.push({
                     id: room.enemyIdCounter++, x: sx, y: sy, hp: 15*room.stage, maxHp: 15*room.stage, type: 'Minion',
                     vx: 0, vy: 0, knockbackX: 0, knockbackY: 0, text: '+', width: 40, height: 40, speed: 1.5,
@@ -645,28 +683,37 @@ export default function App() {
             if (e.stateTimer > 600) {
               e.stateTimer = 0;
               const p = nearestP || { x: e.x, y: e.y };
-              const obsSize = 60;
+              const shapes = [
+                { w: 60, h: 60 },
+                { w: 120, h: 30 },
+                { w: 30, h: 120 },
+                { w: 90, h: 40 },
+                { w: 40, h: 90 }
+              ];
+              const shape = shapes[Math.floor(Math.random() * shapes.length)];
               const angle = Math.random() * Math.PI * 2;
               const dist = 150;
-              const ox = p.x + Math.cos(angle) * dist - obsSize/2;
-              const oy = p.y + Math.sin(angle) * dist - obsSize/2;
+              const ox = p.x + Math.cos(angle) * dist - shape.w/2;
+              const oy = p.y + Math.sin(angle) * dist - shape.h/2;
               
-              currentMap.obstacles.push({
-                x: ox, y: oy, w: obsSize, h: obsSize
+              room.dynamicObstacles.push({
+                x: ox, y: oy, w: shape.w, h: shape.h
               });
               
               // Visual feedback for freezing
               shake.current = 5;
               for(let i=0; i<15; i++) {
                 particles.current.push({
-                  x: ox + obsSize/2 + (Math.random()-0.5)*obsSize, y: oy + obsSize/2 + (Math.random()-0.5)*obsSize,
+                  x: ox + shape.w/2 + (Math.random()-0.5)*shape.w, y: oy + shape.h/2 + (Math.random()-0.5)*shape.h,
                   vx: (Math.random()-0.5)*4, vy: (Math.random()-0.5)*4 - 2,
                   life: 20 + Math.random()*20, text: '❄️', color: '#00bcf2'
                 });
               }
               
               setTimeout(() => {
-                currentMap.obstacles = currentMap.obstacles.filter(o => o.x !== ox || o.y !== oy);
+                if (gameStateRef.current) {
+                  gameStateRef.current.dynamicObstacles = gameStateRef.current.dynamicObstacles.filter(o => o.x !== ox || o.y !== oy);
+                }
               }, 5000);
             }
           } else {
@@ -712,7 +759,21 @@ export default function App() {
         }
 
         if (e.hp <= 0) {
-          if (p) p.kills++;
+          if (p) {
+            p.kills++;
+            if (p.skills.includes('sum')) {
+              p.sumKills = (p.sumKills || 0) + 1;
+              if (p.sumKills >= 10) {
+                p.sumKills = 0;
+                p.sumStacks = (p.sumStacks || 0) + 1;
+                
+                const overflow = Math.max(0, p.sumStacks - 20);
+                p.knockbackMult = 1 + Math.sqrt(overflow) * 0.1;
+                p.sizeMult = 1 + Math.sqrt(overflow) * 0.05;
+                p.eliteDamageMult = 1 + Math.sqrt(overflow) * 0.1;
+              }
+            }
+          }
           
           if (e.type === 'MergedCell') {
             if (nearestP && Math.hypot(nearestP.x - e.x, nearestP.y - e.y) < 600) {
@@ -828,6 +889,10 @@ export default function App() {
                 finalDamage *= 0.1; 
               }
             }
+            
+            if (e.type === 'EliteBoss' || e.type === 'MiniBoss' || e.type === 'Elite') {
+              finalDamage *= (b.eliteDamageMult || 1);
+            }
 
             e.hp -= finalDamage;
             
@@ -851,14 +916,14 @@ export default function App() {
             
             if (b.isBold) {
               const kbResist = e.isBuffed ? 0.2 : 0.8;
-              e.knockbackX = b.vx * kbResist;
-              e.knockbackY = b.vy * kbResist;
+              e.knockbackX = b.vx * kbResist * (b.knockbackMult || 1);
+              e.knockbackY = b.vy * kbResist * (b.knockbackMult || 1);
               shake.current = Math.max(shake.current, 5); // Bigger shake for bold hits
             } else {
               // Add small default knockback for all bullets
               const kbResist = e.isBuffed ? 0.1 : 0.3;
-              e.knockbackX = b.vx * kbResist;
-              e.knockbackY = b.vy * kbResist;
+              e.knockbackX = b.vx * kbResist * (b.knockbackMult || 1);
+              e.knockbackY = b.vy * kbResist * (b.knockbackMult || 1);
             }
 
             b.pierce--;
@@ -1018,14 +1083,18 @@ export default function App() {
     room.isSelectingSkill = false;
     room.stage++;
     room.stageTimer = 0;
-    room.enemies = []; 
-    room.bullets = [];
-    room.puddles = [];
-    room.items = [];
-    const nextMap = MAPS[Math.min(room.stage - 1, MAPS.length - 1)];
+    
+    if (room.stage <= 5) {
+      room.enemies = []; 
+      room.bullets = [];
+      room.puddles = [];
+      room.items = [];
+      room.dynamicObstacles = [];
+      const nextMap = MAPS[Math.min(room.stage - 1, MAPS.length - 1)];
+      p.x = nextMap.playerSpawn.x;
+      p.y = nextMap.playerSpawn.y;
+    }
     p.readyForNextStage = false;
-    p.x = nextMap.playerSpawn.x;
-    p.y = nextMap.playerSpawn.y;
   };
 
   const handleRespawn = () => {
@@ -1038,6 +1107,7 @@ export default function App() {
       p.x = currentMap.playerSpawn.x;
       p.y = currentMap.playerSpawn.y;
       p.invincibleUntil = Date.now() + 3000;
+      room.dynamicObstacles = room.dynamicObstacles.filter(o => Math.hypot(o.x + o.w/2 - p.x, o.y + o.h/2 - p.y) > 150);
     }
   };
 
@@ -1137,6 +1207,27 @@ export default function App() {
         ctx.lineWidth = 2;
         ctx.strokeRect(0, 0, currentMap.width, currentMap.height);
       }
+      
+      if (gameState.margin > 0) {
+        ctx.fillStyle = 'rgba(128, 128, 128, 0.5)';
+        const m = gameState.margin;
+        const w = currentMap.width;
+        const h = currentMap.height;
+        ctx.fillRect(0, 0, w, m);
+        ctx.fillRect(0, h - m, w, m);
+        ctx.fillRect(0, m, m, h - 2 * m);
+        ctx.fillRect(w - m, m, m, h - 2 * m);
+
+        ctx.strokeStyle = '#ff4444';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(m, m, w - 2 * m, h - 2 * m);
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '20px Calibri';
+        ctx.textAlign = 'center';
+        ctx.fillText('页边距 (不可进入)', w / 2, m / 2);
+        ctx.fillText('页边距 (不可进入)', w / 2, h - m / 2);
+      }
 
       currentMap?.obstacles?.forEach((obs: any) => {
         if (!isVisible(obs.x, obs.y, obs.w, obs.h)) return;
@@ -1147,6 +1238,24 @@ export default function App() {
         ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
         
         ctx.strokeStyle = '#e1dfdd';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let i = -obs.h; i < obs.w; i += 20) {
+          ctx.moveTo(obs.x + i, obs.y);
+          ctx.lineTo(obs.x + i + obs.h, obs.y + obs.h);
+        }
+        ctx.stroke();
+      });
+
+      gameState.dynamicObstacles?.forEach((obs: any) => {
+        if (!isVisible(obs.x, obs.y, obs.w, obs.h)) return;
+        ctx.fillStyle = '#f3f2f1';
+        ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+        ctx.strokeStyle = '#00bcf2'; // Blue border for freeze cell obstacles
+        ctx.lineWidth = 2;
+        ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
+        
+        ctx.strokeStyle = '#00bcf2';
         ctx.lineWidth = 1;
         ctx.beginPath();
         for (let i = -obs.h; i < obs.w; i += 20) {
@@ -1369,8 +1478,9 @@ export default function App() {
           ctx.lineWidth = 4;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.strokeText('推翻重做', 0, 0);
-          ctx.fillText('推翻重做', 0, 0);
+          const text = b.wordartText || '推翻重做';
+          ctx.strokeText(text, 0, 0);
+          ctx.fillText(text, 0, 0);
         } else {
           ctx.fillStyle = textColor;
           let fontStr = '';
@@ -1621,6 +1731,23 @@ export default function App() {
           style={{ cursor: 'crosshair' }}
         />
         
+        {me?.skills.includes('sum') && (
+          <div className="absolute top-4 left-4 bg-white/90 p-3 rounded shadow-md text-xs border-l-4 border-blue-500 pointer-events-none z-10">
+            <div className="font-bold text-blue-700 mb-1">=SUM() 叠加层数: {me.sumStacks || 0}</div>
+            <div className="text-gray-700">
+              攻击力加成: +{me.sumStacks && me.sumStacks <= 20 ? me.sumStacks : 20 + Math.floor(Math.sqrt(Math.max(0, (me.sumStacks || 0) - 20)) * 2)}
+            </div>
+            {(me.sumStacks || 0) > 20 && (
+              <div className="text-orange-600 mt-2 pt-2 border-t border-orange-200">
+                <div className="font-bold mb-1">溢出转化生效中!</div>
+                <div className="flex justify-between gap-4"><span>击退:</span> <span>+{Math.floor(((me.knockbackMult || 1) - 1) * 100)}%</span></div>
+                <div className="flex justify-between gap-4"><span>字号:</span> <span>+{Math.floor(((me.sizeMult || 1) - 1) * 100)}%</span></div>
+                <div className="flex justify-between gap-4"><span>对精英伤害:</span> <span>+{Math.floor(((me.eliteDamageMult || 1) - 1) * 100)}%</span></div>
+              </div>
+            )}
+          </div>
+        )}
+
         {showGridMenu && (
           <div 
             id="grid-menu"
@@ -1639,12 +1766,12 @@ export default function App() {
         )}
 
         {uiState?.isSelectingSkill && (
-          <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-20">
-            <div className="bg-white p-6 rounded shadow-xl max-w-2xl w-full">
-              <h2 className="text-2xl font-bold mb-2 text-gray-800">格式化完成！选择一项新能力</h2>
-              <p className="text-gray-600 mb-6">准备进入第 {uiState.stage + 1} 关</p>
+          <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-20 p-4">
+            <div className="bg-white p-6 rounded shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+              <h2 className="text-2xl font-bold mb-2 text-gray-800 shrink-0">格式化完成！选择一项新能力</h2>
+              <p className="text-gray-600 mb-6 shrink-0">准备进入第 {uiState.stage + 1} 关</p>
               
-              <div className="grid grid-cols-1 gap-4">
+              <div className="grid grid-cols-1 gap-4 overflow-y-auto flex-1 pr-2">
                 {(Object.keys(SKILL_NAMES) as Skill[]).filter(s => !me?.skills.includes(s)).map(skill => (
                   <button 
                     key={skill}

@@ -17,6 +17,11 @@ export interface Player {
   deaths: number;
   readyForNextStage: boolean;
   invincibleUntil: number;
+  sumStacks?: number;
+  sumKills?: number;
+  knockbackMult?: number;
+  sizeMult?: number;
+  eliteDamageMult?: number;
 }
 
 export interface AoeWarning {
@@ -99,6 +104,9 @@ export interface Bullet {
   isCrit?: boolean;
   isVlookup?: boolean;
   isWordart?: boolean;
+  wordartText?: string;
+  knockbackMult?: number;
+  eliteDamageMult?: number;
 }
 
 export interface MapDef {
@@ -217,6 +225,8 @@ export interface Room {
   puddleIdCounter: number;
   aoeIdCounter: number;
   itemIdCounter: number;
+  margin: number;
+  dynamicObstacles: {x: number, y: number, w: number, h: number}[];
 }
 
 export function createRoom(roomId: string): Room {
@@ -239,6 +249,8 @@ export function createRoom(roomId: string): Room {
     enemyBulletIdCounter: 0,
     puddleIdCounter: 0,
     aoeIdCounter: 0,
-    itemIdCounter: 0
+    itemIdCounter: 0,
+    margin: 0,
+    dynamicObstacles: []
   };
 }
