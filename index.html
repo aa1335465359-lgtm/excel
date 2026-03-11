@@ -4,6 +4,32 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>My Google AI Studio App</title>
+    <script>
+      // Fix for "Cannot set property fetch of #<Window> which has only a getter"
+      // This happens when polyfills (like formdata-polyfill) try to overwrite window.fetch
+      // in environments where it is defined as a read-only getter.
+      (function() {
+        try {
+          const target = window;
+          const prop = 'fetch';
+          const descriptor = Object.getOwnPropertyDescriptor(target, prop) || 
+                             Object.getOwnPropertyDescriptor(Object.getPrototypeOf(target), prop);
+          
+          if (descriptor && !descriptor.writable && descriptor.configurable) {
+            const originalFetch = window.fetch;
+            Object.defineProperty(target, prop, {
+              value: originalFetch,
+              writable: true,
+              configurable: true,
+              enumerable: true
+            });
+          }
+        } catch (e) {
+          // Fallback: if we can't redefine it, we might just have to hope for the best
+          // or the error will persist, but at least we tried to intercept it.
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

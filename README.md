@@ -1,20 +1,33 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# 📊 Excel保卫战 (Excel Defender)
 
-# Run and deploy your AI Studio app
+> “下班前把这版改好发我。” —— 面对源源不断的修改意见、乱码和无理需求，你决定拿起手中的“格式化”武器，在电子表格里杀出一条血路！
 
-This contains everything you need to run your app locally.
+## 🎮 核心玩法 (Core Gameplay)
 
-View your app in AI Studio: https://ai.studio/apps/4e655d1b-5d13-4e57-b9f7-2b22ee879bb7
+这是一款结合了 **“吸血鬼幸存者 (Vampire Survivors)”** 式割草快感与 **“双摇杆射击 (Twin-stick Shooter)”** 的动作生存游戏。你将扮演一个在 Excel 单元格中艰难求生的打工人，抵御如潮水般涌来的“文本怪物”。
 
-## Run Locally
+### 🕹️ 操作方式
+*   **移动**：`W` `A` `S` `D` 控制角色在单元格网格中移动。
+*   **瞄准**：鼠标移动控制准星方向。
+*   **射击**：按住 `鼠标左键` 持续发射“格式化”子弹。
+*   **网格删除 (大招)**：当拾取到蓝色掉落物（网格工具）时，游戏会进入**“子弹时间”**。此时按住鼠标左键并拖动，可以框选一片区域、整行或整列，松开鼠标即可将选区内的敌人**“一键删除”**！
 
-**Prerequisites:**  Node.js
+### 🛠️ 技能系统 (格式化能力)
+每撑过一关（30秒），你就可以从以下“文本格式”中选择一种强化你的武器。技能可以无限叠加，最终让你变成无情的排版机器：
+1.  **加粗 (Bold) `B`**：子弹变大，伤害翻倍，并附带强大的击退效果。
+2.  **斜体 (Italic) `I`**：子弹获得穿透效果，并且能在屏幕边缘反弹。
+3.  **下划线 (Underline) `U`**：武器升级为多排平行发射，火力覆盖面更广。
+4.  **删除线 (Strikethrough) `ab`**：周期性发射贯穿全屏的红色激光，瞬间清空直线上的敌人。
+5.  **高亮 (Highlight) `A`**：子弹消失时会在原地留下高亮荧光区域，对踩上去的敌人造成持续伤害并减速。
 
+### 👾 敌人类型
+*   **普通乱码 (Minion)**：最基础的杂兵，数量庞大，如“测试文本”、“Lorem ipsum”。
+*   **报错乱码 (Elite)**：红色的精英怪，血量更厚，如“烫烫烫”、“锟斤拷”。
+*   **批注 (MiniBoss)**：带有黄色背景的难缠敌人，体型庞大。
+*   **最终版 (EliteBoss)**：第五关登场的终极 Boss——“【项目方案_最终版_V18_打死不改版】”，拥有极高的血量和压迫感。
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## 🚀 部署与运行
+本项目为纯前端单机游戏，无需后端服务器。
+1. 安装依赖：`npm install`
+2. 本地开发：`npm run dev`
+3. 打包构建：`npm run build` (生成的 `dist` 目录可直接部署到 Vercel, GitHub Pages 等静态托管平台)
