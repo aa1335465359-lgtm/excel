@@ -18,13 +18,26 @@ export interface Player {
   invincibleUntil: number;
 }
 
+export interface AoeWarning {
+  id: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  type: 'rect' | 'row' | 'col';
+  life: number;
+  maxLife: number;
+}
+
+export type EnemyType = 'Minion' | 'Elite' | 'MiniBoss' | 'EliteBoss' | 'Value' | 'FormatBrush' | 'FreezeCell' | 'ProtectedView' | 'MergedCell' | 'SplitCell';
+
 export interface Enemy {
   id: number;
   x: number;
   y: number;
   hp: number;
   maxHp: number;
-  type: 'Minion' | 'Elite' | 'MiniBoss' | 'EliteBoss';
+  type: EnemyType;
   vx: number;
   vy: number;
   knockbackX: number;
@@ -33,6 +46,37 @@ export interface Enemy {
   width: number;
   height: number;
   speed: number;
+  state?: 'idle' | 'warning' | 'dashing';
+  stateTimer?: number;
+  dashTargetX?: number;
+  dashTargetY?: number;
+  facingAngle?: number;
+  lastAttack?: number;
+  isBuffed?: boolean;
+}
+
+export interface EnemyBullet {
+  id: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  damage: number;
+  life: number;
+  size: number;
+  type: 'value' | 'row' | 'col';
+}
+
+export interface Puddle {
+  id: number;
+  x: number;
+  y: number;
+  radius: number;
+  type: 'formatPaint' | 'freeze' | 'highlight';
+  life: number;
+  maxLife: number;
+  damage?: number;
+  owner?: string;
 }
 
 export interface Bullet {
@@ -154,7 +198,9 @@ export interface Room {
   players: Record<string, Player>;
   enemies: Enemy[];
   bullets: Bullet[];
-  puddles: any[];
+  enemyBullets: EnemyBullet[];
+  puddles: Puddle[];
+  aoeWarnings: AoeWarning[];
   lasers: any[];
   items: any[];
   stage: number;
@@ -163,6 +209,9 @@ export interface Room {
   bulletTime: number;
   enemyIdCounter: number;
   bulletIdCounter: number;
+  enemyBulletIdCounter: number;
+  puddleIdCounter: number;
+  aoeIdCounter: number;
   itemIdCounter: number;
 }
 
@@ -172,7 +221,9 @@ export function createRoom(roomId: string): Room {
     players: {},
     enemies: [],
     bullets: [],
+    enemyBullets: [],
     puddles: [],
+    aoeWarnings: [],
     lasers: [],
     items: [],
     stage: 1,
@@ -181,6 +232,9 @@ export function createRoom(roomId: string): Room {
     bulletTime: 0,
     enemyIdCounter: 0,
     bulletIdCounter: 0,
+    enemyBulletIdCounter: 0,
+    puddleIdCounter: 0,
+    aoeIdCounter: 0,
     itemIdCounter: 0
   };
 }
