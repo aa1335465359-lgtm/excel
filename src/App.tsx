@@ -371,7 +371,7 @@ export default function App() {
 
           const r = Math.random();
           let eliteRatio = 0;
-          if (room.stage <= 4) eliteRatio = Math.min(0.20, (room.stage - 1) * 0.07);
+          if (room.stage <= 4) eliteRatio = Math.min(0.12, (room.stage - 1) * 0.04);
           else if (room.stage === 5) eliteRatio = 0.25;
           else eliteRatio = Math.min(0.65, 0.25 + (room.stage - 5) * 0.08);
 
@@ -473,7 +473,7 @@ export default function App() {
       const p = room.players[myId];
       if (p && p.hp > 0) {
         if (p.hp < p.maxHp) {
-          p.hp = Math.min(p.maxHp, p.hp + 0.1); // ~6 HP per second regen
+          p.hp = Math.min(p.maxHp, p.hp + 0.3); // ~18 HP per second regen
         }
         
         let speedMultiplier = 1;
@@ -685,8 +685,8 @@ export default function App() {
               fireCtrlC(finalDamage);
             }
           } else if (form === 'sparkline') {
-            fireRate = 150; // High frequency
-            damage = 8;
+            fireRate = 180; // High frequency
+            damage = 18;
             let range = 3000; // Infinite range
             let width = 12;
             let isSlow = false;
@@ -750,9 +750,9 @@ export default function App() {
             }
           } else if (form === 'comment') {
             fireRate = 600;
-            damage = 34;
+            damage = 50;
             bulletSpeed = 11.5; // 230px/s approx
-            let explosionRadius = 80;
+            let explosionRadius = 100;
             let count = 1;
 
             if (specific.includes('comment_size')) {
@@ -1544,6 +1544,27 @@ export default function App() {
                 kbResist /= (e.weight || 1);
                 e.vx += Math.cos(angle) * 15 * kbResist;
                 e.vy += Math.sin(angle) * 15 * kbResist;
+                
+                // comment_chain logic
+                if (e.hp <= 0) {
+                  const ownerPlayer = room.players[b.owner];
+                  if (ownerPlayer && ownerPlayer.specificUpgrades.includes('comment_chain') && Math.random() < 0.5) {
+                    if ((b.chainDepth || 0) < 3) { // Limit chain depth to prevent infinite loops
+                      room.bullets.push({
+                        ...b,
+                        id: room.bulletIdCounter++,
+                        x: e.x, y: e.y,
+                        life: 0, // Explode immediately next frame
+                        maxLife: 0,
+                        damage: b.damage * 0.5,
+                        explosionRadius: (b.explosionRadius || 70) * 0.8,
+                        splitsLeft: 0,
+                        chainDepth: (b.chainDepth || 0) + 1,
+                        hitTargets: new Set()
+                      });
+                    }
+                  }
+                }
               }
             });
             
@@ -1584,7 +1605,9 @@ export default function App() {
                   life: 30 + Math.random() * 20,
                   maxLife: 50,
                   splitsLeft: 0,
-                  pierce: 1
+                  chainDepth: 99, // Prevent chain from triggering on split bullets to avoid crazy loops
+                  pierce: 1,
+                  hitTargets: new Set()
                 });
               }
             }
@@ -1667,8 +1690,12 @@ export default function App() {
 
               e.hp -= finalDamage;
               
-              if (b.isStrikethrough && e.hp > 0 && e.hp / e.maxHp < 0.2 && e.type !== 'EliteBoss' && e.type !== 'MiniBoss') {
+              if (b.isStrikethrough && e.hp > 0 && e.hp / e.maxHp <= 0.2 && e.type !== 'EliteBoss' && e.type !== 'MiniBoss') {
                 e.hp = 0;
+                const deathTexts = ['DELETE', 'KILL', 'GG.EXE'];
+                particles.current.push({
+                  x: e.x, y: e.y, vx: 0, vy: -1, life: 30, text: deathTexts[Math.floor(Math.random() * deathTexts.length)], color: '#ff0000'
+                });
               }
               
               if (e.hp > 0 && b.stunChance && Math.random() < b.stunChance) {
@@ -1686,18 +1713,45 @@ export default function App() {
                 });
               }
               
+              let dmgText = `-${Math.floor(finalDamage)}${b.isCrit ? '!' : ''}`;
+              if (finalDamage >= 100) {
+                const hex = Math.floor(finalDamage).toString(16).toUpperCase();
+                dmgText = b.isCrit ? `CRIT:0x${hex}!!` : `-0x${hex}`;
+              }
+              
               particles.current.push({
                 x: e.x + (Math.random()-0.5)*30, y: e.y + (Math.random()-0.5)*30,
                 vx: (Math.random()-0.5)*6, vy: (Math.random()-0.5)*6 - 2,
-                life: 30 + Math.random()*20, text: `-${Math.floor(finalDamage)}${b.isCrit ? '!' : ''}`, color: b.isCrit ? '#e81123' : '#666666'
+                life: 30 + Math.random()*20, text: dmgText, color: b.isCrit ? '#e81123' : '#666666'
               });
+              
+              if (b.isHighlight && Math.random() < 0.3) {
+                room.puddles.push({
+                  id: room.puddleIdCounter++, x: e.x, y: e.y, radius: 80, type: 'highlight', life: 180, maxLife: 180, damage: b.damage * 0.3, owner: b.owner
+                });
+              }
+              const ownerPlayer = room.players[b.owner];
+              if (ownerPlayer && ownerPlayer.generalUpgrades.includes('format_painter') && Math.random() < 0.2) {
+                room.puddles.push({
+                  id: room.puddleIdCounter++, x: e.x, y: e.y, radius: 60, type: 'formatPaint', life: 200, maxLife: 200, damage: b.damage * 0.2, owner: b.owner
+                });
+              }
             }
 
             if (b.isBulldozer && e.type !== 'EliteBoss' && e.type !== 'MiniBoss') {
               const prevX = e.x;
               const prevY = e.y;
-              e.x += b.vx * timeSpeed;
-              e.y += b.vy * timeSpeed;
+              
+              // Push them slightly faster than the bullet
+              e.x += b.vx * timeSpeed * 1.5;
+              e.y += b.vy * timeSpeed * 1.5;
+              
+              // Pull towards the center of the bullet to prevent slipping out
+              if (Math.abs(b.vx) > Math.abs(b.vy)) {
+                e.y += (b.y - e.y) * 0.2;
+              } else {
+                e.x += (b.x - e.x) * 0.2;
+              }
               
               let atWall = false;
               if (e.x <= e.width/2 || e.x >= currentMap.width - e.width/2 || 
@@ -1725,22 +1779,24 @@ export default function App() {
                     } else {
                       e.hp = 0;
                       shake.current = Math.max(shake.current, 10);
+                      const deathTexts = ['DELETE', 'KILL', 'GG.EXE'];
                       for(let i=0; i<5; i++) {
                         particles.current.push({
                           x: e.x, y: e.y,
                           vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10,
-                          life: 30, color: '#ff0000', text: 'CRUSH!'
+                          life: 30, color: '#ff0000', text: deathTexts[Math.floor(Math.random() * deathTexts.length)]
                         });
                       }
                     }
                   } else {
                     e.hp = 0;
                     shake.current = Math.max(shake.current, 10);
+                    const deathTexts = ['DELETE', 'KILL', 'GG.EXE'];
                     for(let i=0; i<5; i++) {
                       particles.current.push({
                         x: e.x, y: e.y,
                         vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10,
-                        life: 30, color: '#ff0000', text: 'CRUSH!'
+                        life: 30, color: '#ff0000', text: deathTexts[Math.floor(Math.random() * deathTexts.length)]
                       });
                     }
                   }
@@ -1804,7 +1860,8 @@ export default function App() {
                     vy: Math.sin(newAngle) * speed,
                     splitsLeft: 0,
                     pierce: 1,
-                    damage: b.damage * 0.45
+                    damage: b.damage * 0.45,
+                    hitTargets: new Set()
                   });
                 }
                 b.life = 0;
@@ -1818,18 +1875,6 @@ export default function App() {
         }
 
         if (hitEnemy && b.pierce <= 0) {
-          if (b.isHighlight) {
-            room.puddles.push({
-              id: room.puddleIdCounter++, x: b.x, y: b.y, radius: 80, type: 'highlight', life: 180, maxLife: 180, damage: b.damage * 0.3, owner: b.owner
-            });
-          }
-          // Format Painter
-          const ownerPlayer = room.players[b.owner];
-          if (ownerPlayer && ownerPlayer.generalUpgrades.includes('format_painter') && Math.random() < 0.2) {
-            room.puddles.push({
-              id: room.puddleIdCounter++, x: b.x, y: b.y, radius: 60, type: 'formatPaint', life: 200, maxLife: 200, damage: b.damage * 0.2, owner: b.owner
-            });
-          }
           if (b.life > 0) {
             room.bullets.splice(i, 1);
           }
@@ -1960,8 +2005,12 @@ export default function App() {
             e.hp -= finalDamage;
             
             // Strikethrough execute
-            if (l.isStrikethrough && e.hp > 0 && e.hp / e.maxHp < 0.2 && e.type !== 'EliteBoss' && e.type !== 'MiniBoss') {
+            if (l.isStrikethrough && e.hp > 0 && e.hp / e.maxHp <= 0.2 && e.type !== 'EliteBoss' && e.type !== 'MiniBoss') {
               e.hp = 0;
+              const deathTexts = ['DELETE', 'KILL', 'GG.EXE'];
+              particles.current.push({
+                x: e.x, y: e.y, vx: 0, vy: -1, life: 30, text: deathTexts[Math.floor(Math.random() * deathTexts.length)], color: '#ff0000'
+              });
             }
             
             if (l.isCannon && e.type !== 'EliteBoss' && e.type !== 'MiniBoss') {
@@ -1980,10 +2029,16 @@ export default function App() {
             
             shake.current = Math.max(shake.current, 1);
             
+            let dmgText = `-${Math.floor(finalDamage)}${l.isCrit ? '!' : ''}`;
+            if (finalDamage >= 100) {
+              const hex = Math.floor(finalDamage).toString(16).toUpperCase();
+              dmgText = l.isCrit ? `CRIT:0x${hex}!!` : `-0x${hex}`;
+            }
+            
             particles.current.push({
               x: e.x + (Math.random()-0.5)*30, y: e.y + (Math.random()-0.5)*30,
               vx: (Math.random()-0.5)*6, vy: (Math.random()-0.5)*6 - 2,
-              life: 20 + Math.random()*10, text: `-${Math.floor(finalDamage)}${l.isCrit ? '!' : ''}`, color: l.isCrit ? '#e81123' : '#0078d7'
+              life: 20 + Math.random()*10, text: dmgText, color: l.isCrit ? '#e81123' : '#0078d7'
             });
             
             // Format Painter
@@ -2338,31 +2393,80 @@ export default function App() {
 
       gameState.puddles?.forEach((p: any) => {
         if (!isVisible(p.x - p.radius, p.y - p.radius, p.radius * 2, p.radius * 2)) return;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-        if (p.type === 'formatPaint') {
-          ctx.fillStyle = `rgba(255, 200, 0, ${Math.min(0.4, p.life / 500)})`;
-          ctx.fill();
-          ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(0.5, p.life / 500)})`;
-          ctx.font = '12px Calibri';
+        
+        if (p.type === 'explosion') {
+          const progress = 1 - (p.life / p.maxLife);
+          const alpha = p.life / p.maxLife;
+          const explosionChars = ['#REF!', '#VALUE!', '#NULL!', 'ERR', '{}', '[[]]', 'NaN', '0xFF', 'SIGSEGV', 'OVERFLOW'];
+          
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          
+          const rings = 3;
+          for (let r = 1; r <= rings; r++) {
+            const ringRadius = p.radius * progress * (r / rings);
+            const numChars = Math.floor(ringRadius / 5) + 4;
+            const fontSize = Math.max(10, 30 - r * 5);
+            ctx.font = `bold ${fontSize}px monospace`;
+            ctx.fillStyle = `rgba(255, 60, 0, ${alpha * (1 - r/rings * 0.5)})`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            for (let i = 0; i < numChars; i++) {
+              const angle = (i / numChars) * Math.PI * 2 + (Date.now() * 0.002 * r);
+              const char = explosionChars[(i + r) % explosionChars.length];
+              const cx = Math.cos(angle) * ringRadius;
+              const cy = Math.sin(angle) * ringRadius;
+              
+              ctx.save();
+              ctx.translate(cx, cy);
+              ctx.rotate(angle + Math.PI/2);
+              ctx.fillText(char, 0, 0);
+              ctx.restore();
+            }
+          }
+          ctx.restore();
+        } else if (p.type === 'highlight' || p.type === 'burn_slow') {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+          ctx.clip();
+          
+          const alpha = p.life / p.maxLife;
+          ctx.fillStyle = p.type === 'highlight' ? `rgba(154, 205, 50, ${0.3 * alpha})` : `rgba(255, 69, 0, ${0.4 * alpha})`;
+          ctx.fill(); // Base background
+          
+          ctx.fillStyle = p.type === 'highlight' ? `rgba(154, 205, 50, ${0.6 * alpha})` : `rgba(255, 69, 0, ${0.8 * alpha})`;
+          ctx.font = '12px monospace';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText('🖌️', p.x, p.y);
-        } else if (p.type === 'highlight') {
-          ctx.fillStyle = `rgba(255, 255, 0, ${Math.min(0.3, p.life / 60)})`;
-          ctx.fill();
-        } else if (p.type === 'explosion') {
-          ctx.fillStyle = `rgba(255, 100, 0, ${Math.min(0.6, p.life / 30)})`;
-          ctx.fill();
-          ctx.strokeStyle = `rgba(255, 0, 0, ${Math.min(0.8, p.life / 30)})`;
-          ctx.lineWidth = 4;
-          ctx.stroke();
-        } else if (p.type === 'burn_slow') {
-          ctx.fillStyle = `rgba(255, 69, 0, ${Math.min(0.4, p.life / 180)})`;
-          ctx.fill();
-        } else if (p.type === 'blacken') {
-          ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(0.8, p.life / 600)})`;
-          ctx.fill();
+          
+          const matrixChars = '01';
+          const scrollY = (Date.now() * 0.05) % 20;
+          
+          for (let mx = -p.radius; mx <= p.radius; mx += 15) {
+            for (let my = -p.radius - 20; my <= p.radius; my += 20) {
+              const char = matrixChars[Math.floor(Math.abs(mx * my + Date.now()*0.001)) % matrixChars.length];
+              ctx.fillText(char, p.x + mx, p.y + my + scrollY);
+            }
+          }
+          
+          ctx.restore();
+        } else {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+          if (p.type === 'formatPaint') {
+            ctx.fillStyle = `rgba(255, 200, 0, ${Math.min(0.4, p.life / 500)})`;
+            ctx.fill();
+            ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(0.5, p.life / 500)})`;
+            ctx.font = '12px Calibri';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('🖌️', p.x, p.y);
+          } else if (p.type === 'blacken') {
+            ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(0.8, p.life / 600)})`;
+            ctx.fill();
+          }
         }
       });
 
@@ -2428,6 +2532,17 @@ export default function App() {
           ctx.strokeStyle = '#00a2ed';
           ctx.lineWidth = 4;
           ctx.stroke();
+        }
+        
+        if (e.spreadsheetMark && e.spreadsheetMark > Date.now()) {
+          ctx.save();
+          ctx.translate(e.x, e.y);
+          ctx.rotate(Date.now() * 0.005);
+          ctx.strokeStyle = '#107c41';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5, 5]);
+          ctx.strokeRect(-e.width/2 - 5, -e.height/2 - 5, e.width + 10, e.height + 10);
+          ctx.restore();
         }
         
         if (e.type === 'Minion') {
@@ -2594,7 +2709,15 @@ export default function App() {
           ctx.font = (b.isItalic ? 'italic ' : '') + '900 ' + b.size + 'px "Microsoft YaHei", Impact, sans-serif';
           
           // Enhanced visual for WordArt
-          const text = b.isTitle ? '大标题' : (b.wordartText || '推翻重做');
+          let text = b.isTitle ? '大标题' : (b.wordartText || '推翻重做');
+          
+          // Randomly replace 1 character with gibberish every 3 frames
+          if (Math.floor(Date.now() / 50) % 3 === 0 && text.length > 0) {
+            const gibberish = ['烫烫烫', '锟斤拷', 'XXXX', '▓░▒'];
+            const replaceIdx = Math.floor(Math.random() * text.length);
+            const randGib = gibberish[Math.floor(Math.random() * gibberish.length)];
+            text = text.substring(0, replaceIdx) + randGib[0] + text.substring(replaceIdx + 1);
+          }
           
           if (b.isTitle) {
             // Title gets a special gradient and shadow
@@ -2636,6 +2759,12 @@ export default function App() {
           ctx.shadowOffsetX = 0;
           ctx.shadowOffsetY = 0;
           
+          // Semi-transparent green scanline
+          const textWidth = ctx.measureText(text).width;
+          const scanlineY = (Date.now() * 0.1) % b.size - b.size/2;
+          ctx.fillStyle = `rgba(0, 255, 0, ${0.3 + 0.2 * Math.sin(Date.now() * 0.02)})`;
+          ctx.fillRect(-textWidth/2 - 10, scanlineY, textWidth + 20, 4);
+          
           if (b.isStrikethrough) {
             ctx.beginPath();
             ctx.moveTo(-b.size * 2, 0);
@@ -2652,16 +2781,27 @@ export default function App() {
           ctx.lineWidth = b.isBold ? 6 : 3;
           ctx.stroke();
         } else if (b.type === 'comment') {
-          ctx.fillStyle = '#fff2ab';
-          ctx.fillRect(-b.size/2, -b.size/2, b.size, b.size);
-          ctx.strokeStyle = '#c8c6c4';
-          ctx.lineWidth = 1;
-          ctx.strokeRect(-b.size/2, -b.size/2, b.size, b.size);
-          ctx.fillStyle = '#000000';
-          ctx.font = (b.isItalic ? 'italic ' : '') + '10px Calibri';
+          ctx.fillStyle = '#222';
+          ctx.beginPath();
+          ctx.arc(0, 0, b.size/2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#ff4400';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          
+          ctx.fillStyle = '#ff4400';
+          ctx.font = 'bold 12px monospace';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText('批注', 0, 0);
+          const bombText = '/**/';
+          ctx.fillText(bombText, 0, 0);
+          
+          // Add a little fuse spark
+          const sparkAngle = Date.now() * 0.01;
+          const sx = Math.cos(sparkAngle) * (b.size/2 + 4);
+          const sy = Math.sin(sparkAngle) * (b.size/2 + 4);
+          ctx.fillStyle = '#ffff00';
+          ctx.fillRect(sx - 2, sy - 2, 4, 4);
           
           if (b.isStrikethrough) {
             ctx.beginPath();
@@ -2755,35 +2895,45 @@ export default function App() {
         
         if (l.type === 'sparkline') {
           const isUlt = l.width > 20; // Heuristic for ult laser
+          const isCannon = l.isCannon;
+          const alpha = Math.max(0, l.life / l.maxLife);
           
-          ctx.beginPath();
-          ctx.moveTo(0, 0);
-          ctx.lineTo(l.range, 0);
+          const sparklineChars = '01NaNnull{}[]()=>undefinedvoid0xFFerr%$#@!';
           
-          if (isUlt) {
-            // Ult laser has a core and a glow
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = l.width * 0.4;
-            ctx.globalAlpha = Math.max(0, l.life / l.maxLife);
-            ctx.stroke();
-            
-            ctx.beginPath();
-            ctx.moveTo(0, 0);
-            ctx.lineTo(l.range, 0);
-            ctx.strokeStyle = l.isStrikethrough ? '#ff3333' : '#00a8ff';
-            ctx.lineWidth = l.width;
-            ctx.globalAlpha = Math.max(0, (l.life / l.maxLife) * 0.7);
-            ctx.shadowColor = l.isStrikethrough ? '#ff0000' : '#0078d7';
-            ctx.shadowBlur = 20;
+          if (isCannon) {
+            ctx.shadowColor = `rgba(0, 0, 0, ${alpha})`;
+            ctx.shadowBlur = 15;
+            ctx.fillStyle = `rgba(50, 50, 50, ${alpha})`;
+            ctx.font = 'bold 36px monospace';
+            const charCount = Math.floor(l.range / 20);
+            for (let i = 0; i < charCount; i++) {
+              const dist = i * 20;
+              const seed = Math.floor(Date.now() / 50) + i;
+              const char = sparklineChars[seed % sparklineChars.length];
+              const yOffset = Math.sin(dist * 0.05 + Date.now() * 0.01) * 15;
+              
+              for (let w = -2; w <= 2; w++) {
+                ctx.fillText(char, dist, yOffset + w * 25);
+              }
+            }
           } else {
-            ctx.strokeStyle = l.isStrikethrough ? '#e81123' : '#0078d7';
-            ctx.lineWidth = l.width;
-            ctx.globalAlpha = Math.max(0, l.life / l.maxLife);
-            ctx.shadowColor = l.isStrikethrough ? '#e81123' : '#0078d7';
-            ctx.shadowBlur = 10;
+            ctx.fillStyle = `rgba(30, 30, 30, ${alpha})`;
+            ctx.font = '14px monospace';
+            const charCount = Math.floor(l.range / 10);
+            for (let i = 0; i < charCount; i++) {
+              const dist = i * 10;
+              const seed = Math.floor(Date.now() / 50) + i;
+              const char = sparklineChars[seed % sparklineChars.length];
+              const yOffset = Math.sin(dist * 0.1 + Date.now() * 0.01) * 5;
+              const fade = 1 - (dist / l.range);
+              ctx.fillStyle = `rgba(30, 30, 30, ${alpha * fade})`;
+              
+              const widthMultiplier = isUlt ? 3 : 1;
+              for (let w = -widthMultiplier; w <= widthMultiplier; w++) {
+                ctx.fillText(char, dist, yOffset + w * 12);
+              }
+            }
           }
-          
-          ctx.stroke();
           
           // Reset shadow
           ctx.shadowBlur = 0;

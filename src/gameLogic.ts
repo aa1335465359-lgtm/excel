@@ -8,7 +8,8 @@ export type SpecificUpgrade =
   | 'wordart_wide' | 'wordart_fast_push' | 'wordart_shield' | 'wordart_stun' | 'wordart_quad'
   | 'array_plus_2' | 'array_rapid' | 'array_bounce' | 'array_pierce' | 'array_big'
   | 'sparkline_freeze' | 'sparkline_cannon' | 'sparkline_reflect' | 'sparkline_overclock'
-  | 'comment_triple' | 'comment_knockback' | 'comment_split' | 'comment_black' | 'comment_super';
+  | 'comment_triple' | 'comment_knockback' | 'comment_split' | 'comment_black' | 'comment_super'
+  | 'comment_gravity_well' | 'sparkline_burn_stack' | 'sparkline_overload' | 'wordart_pile_driver' | 'wordart_column_freeze' | 'array_spreadsheet';
 
 export type GeneralUpgrade = 'bold' | 'underline' | 'highlight' | 'rand' | 'vlookup' | 'sum' | 'italic' | 'strikethrough' | 'ctrl_c' | 'ctrl_z' | 'format_painter';
 
@@ -68,6 +69,12 @@ export const UPGRADE_NAMES: Record<Upgrade, string> = {
   comment_split: '分裂炸弹',
   comment_black: '炸黑了',
   comment_super: '超级炸弹',
+  comment_gravity_well: '重力井',
+  sparkline_burn_stack: '灼烧叠层',
+  sparkline_overload: '过载',
+  wordart_pile_driver: '连续强推',
+  wordart_column_freeze: '冻结列',
+  array_spreadsheet: '电子表格',
   bold: '加粗 (Bold)',
   italic: '斜体 (Italic)',
   underline: '下划线 (Underline)',
@@ -121,6 +128,12 @@ export const UPGRADE_DESCS: Record<Upgrade, string> = {
   comment_split: '【分裂炸弹】碰到敌人后分裂成3颗炸弹',
   comment_black: '【炸黑了】爆炸后把地面炸黑(视觉效果)',
   comment_super: '【超级炸弹】每30秒扔出巨大炸弹，秒杀普通/精英怪，并附加减速和灼烧',
+  comment_gravity_well: '炸弹飞行中对200px内敌人产生吸引',
+  sparkline_burn_stack: '激光持续命中叠加灼烧(每层5DPS，最多10层)',
+  sparkline_overload: '命中已有5层灼烧的目标时触发爆炸',
+  wordart_pile_driver: '推行距离超过300px时额外造成等量伤害',
+  wordart_column_freeze: '大字飞过的路径留下5秒减速区，敌人移速-90%',
+  array_spreadsheet: '命中存活敌人留下4秒标记，下次Array伤害×2',
   bold: '直接伤害 +30%，击退 +6px',
   italic: '飞行速度 +15%，射速 +10%',
   underline: '攻击留下1.4秒拖尾/残痕，伤害7/s',
@@ -260,6 +273,8 @@ export interface Bullet {
   bouncesLeft?: number;
   isItalic?: boolean;
   isStrikethrough?: boolean;
+  isBlacken?: boolean;
+  chainDepth?: number;
   isBulldozer?: boolean;
   hitTargets?: Set<number>;
   angle?: number;
